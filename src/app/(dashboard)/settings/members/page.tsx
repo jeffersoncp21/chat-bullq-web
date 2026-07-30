@@ -206,24 +206,18 @@ export default function SettingsMembersPage() {
                       )}
                     </td>
                     <td className="px-4 py-3">
-                      {/* OWNER tem acesso intrínseco a tudo (mesmo canais
-                          PRIVATE). ADMIN herda os ORG por padrão mas
-                          precisa de grant explícito pra PRIVATE — daí
-                          ganha o botão "Gerenciar" também. AGENT só vê
-                          o que tem grant. */}
-                      {m.role === 'OWNER' ? (
-                        <span className="inline-flex items-center gap-1 rounded-md bg-zinc-100 px-2 py-0.5 text-[11px] text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
-                          Acesso total
-                        </span>
-                      ) : (
-                        <button
-                          onClick={() => setDrawerMember(m)}
-                          className="inline-flex items-center gap-1.5 rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
-                          data-testid="member-channels-btn"
-                        >
-                          <Hash className="h-3 w-3" /> Gerenciar
-                        </button>
-                      )}
+                      {/* OWNER e ADMIN herdam os canais ORG, mas canal
+                          PRIVATE exige grant explícito pra qualquer role —
+                          inclusive o dono da org. Por isso todo mundo tem
+                          o botão: sem ele, não havia como liberar um canal
+                          privado pro OWNER. */}
+                      <button
+                        onClick={() => setDrawerMember(m)}
+                        className="inline-flex items-center gap-1.5 rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
+                        data-testid="member-channels-btn"
+                      >
+                        <Hash className="h-3 w-3" /> Gerenciar
+                      </button>
                     </td>
                     <td className="px-4 py-3 text-xs text-zinc-500">
                       {new Date(m.joinedAt).toLocaleDateString('pt-BR')}

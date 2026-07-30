@@ -18,15 +18,20 @@ interface Props {
  * Drawer de gerenciar canais por membro.
  *
  * Regras de visibilidade reproduzidas no UI (espelho do ChannelAccessService):
- * - OWNER: acesso intrínseco a tudo, drawer fica read-only com mensagem.
- * - ADMIN: vê todos canais ORG por herança (mostrado como "Herdado"
- *          read-only) + precisa grant explícito pra cada PRIVATE
- *          (toggleable). Salva só os PRIVATE selecionados.
+ * - OWNER/ADMIN: veem todos os canais ORG por herança (mostrados como
+ *                "Herdado", read-only) + precisam de grant explícito pra
+ *                cada PRIVATE (toggleable). Owner NÃO é exceção: canal
+ *                privado exige grant até pra ele.
  * - AGENT: nada por herança — todos os canais são toggleable.
+ *
+ * A lista de canais é a que o CALLER enxerga. Canal privado de outro membro
+ * não aparece aqui e o backend também não deixa concedê-lo — quem libera é
+ * quem já tem acesso a ele.
  */
 export function MemberChannelsDrawer({ open, onClose, member, onSaved }: Props) {
-  const isOwner = member?.role === 'OWNER';
-  const enabled = open && !!member && !isOwner;
+  const inheritsOrgChannels =
+    member?.role === 'OWNER' || member?.role === 'ADMIN';
+  const enabled = open && !!member;
 
   const { data: channels, isLoading: loadingChannels } = useQuery({
     queryKey: ['channels'],
@@ -43,17 +48,24 @@ export function MemberChannelsDrawer({ open, onClose, member, onSaved }: Props) 
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [saving, setSaving] = useState(false);
 
+  // Troca de membro zera a seleção: enquanto o GET do novo está em voo,
+  // `selected` ainda guardaria o que foi marcado pro anterior — e um Salvar
+  // apressado gravaria os canais de um no outro.
+  useEffect(() => {
+    setSelected(new Set());
+  }, [member?.id]);
+
   useEffect(() => {
     if (access) setSelected(new Set(access.channelIds));
   }, [access]);
 
-  // Pre-split por visibility quando member é ADMIN — ORG canais são
-  // herdados (read-only), PRIVATE são toggleable.
+  // Pre-split por visibility quando o membro herda os ORG (OWNER/ADMIN) —
+  // esses ficam read-only e só os PRIVATE são toggleable.
   const { inherited, toggleable } = useMemo(() => {
     if (!channels || !member) {
       return { inherited: [] as Channel[], toggleable: [] as Channel[] };
     }
-    if (member.role === 'ADMIN') {
+    if (inheritsOrgChannels) {
       return {
         inherited: channels.filter((c) => c.visibility !== 'PRIVATE'),
         toggleable: channels.filter((c) => c.visibility === 'PRIVATE'),
@@ -61,7 +73,7 @@ export function MemberChannelsDrawer({ open, onClose, member, onSaved }: Props) 
     }
     // AGENT: todos toggleable
     return { inherited: [] as Channel[], toggleable: channels };
-  }, [channels, member]);
+  }, [channels, member, inheritsOrgChannels]);
 
   if (!open || !member) return null;
 
@@ -77,14 +89,20 @@ export function MemberChannelsDrawer({ open, onClose, member, onSaved }: Props) 
   const save = async () => {
     setSaving(true);
     try {
-      // Pra ADMIN: salva apenas os IDs PRIVATE selecionados (não interfere
-      // nos ORG que são herdados). Pra AGENT: salva tudo selecionado.
-      const toPersist =
-        member.role === 'ADMIN'
-          ? [...selected].filter((id) =>
-              toggleable.some((c) => c.id === id),
-            )
-          : [...selected];
+      // Substitui só o que está marcável nesta tela e devolve intactos os
+      // grants que ela não edita — pra OWNER/ADMIN são os grants em canal
+      // ORG (herança já cobre, mas apagá-los seria perda silenciosa de
+      // dado, e eles voltam a valer se o canal virar PRIVATE).
+      const toggleableIds = new Set(toggleable.map((c) => c.id));
+      const untouched = (access?.channelIds ?? []).filter(
+        (id) => !toggleableIds.has(id),
+      );
+      const toPersist = [
+        ...new Set([
+          ...untouched,
+          ...[...selected].filter((id) => toggleableIds.has(id)),
+        ]),
+      ];
       await channelAccessService.setMemberChannels(member.id, toPersist);
       toast.success('Canais atualizados');
       onSaved?.();
@@ -96,11 +114,10 @@ export function MemberChannelsDrawer({ open, onClose, member, onSaved }: Props) 
     }
   };
 
-  const headerSubtitle = isOwner
-    ? 'Proprietário tem acesso a todos os canais — incluindo privados.'
-    : member.role === 'ADMIN'
-      ? 'Admin enxerga todos os canais públicos automaticamente. Pra canais privados, é preciso liberar acesso individualmente.'
-      : 'Marque os canais que este agente pode ver e atender.';
+  const roleLabel = member.role === 'OWNER' ? 'Proprietário' : 'Admin';
+  const headerSubtitle = inheritsOrgChannels
+    ? `${roleLabel} enxerga todos os canais públicos automaticamente. Pra canais privados, é preciso liberar acesso individualmente.`
+    : 'Marque os canais que este agente pode ver e atender.';
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end">
@@ -127,11 +144,7 @@ export function MemberChannelsDrawer({ open, onClose, member, onSaved }: Props) 
         </header>
 
         <div className="flex-1 overflow-y-auto px-5 py-4">
-          {isOwner ? (
-            <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800 dark:border-amber-900/40 dark:bg-amber-900/20 dark:text-amber-200">
-              Acesso total. Não há restrição por canal pro proprietário.
-            </div>
-          ) : loadingChannels || loadingAccess ? (
+          {loadingChannels || loadingAccess ? (
             <div className="flex items-center justify-center py-12">
               <Loader2 className="h-5 w-5 animate-spin text-zinc-400" />
             </div>
@@ -172,7 +185,7 @@ export function MemberChannelsDrawer({ open, onClose, member, onSaved }: Props) 
               {toggleable.length > 0 && (
                 <section>
                   <h4 className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-zinc-500">
-                    {member.role === 'ADMIN' ? (
+                    {inheritsOrgChannels ? (
                       <>
                         <Lock className="h-3 w-3" /> Privados (precisa liberar)
                       </>
@@ -213,34 +226,35 @@ export function MemberChannelsDrawer({ open, onClose, member, onSaved }: Props) 
                 </section>
               )}
 
-              {member.role === 'ADMIN' && toggleable.length === 0 && (
+              {inheritsOrgChannels && toggleable.length === 0 && (
                 <p className="text-xs text-zinc-500">
-                  Não existem canais privados nesta organização. O admin
-                  enxerga todos os canais.
+                  Nenhum canal privado que você possa liberar. Canal privado
+                  de outro membro não aparece aqui — quem já tem acesso a ele
+                  é quem libera.
                 </p>
               )}
             </div>
           )}
         </div>
 
-        {!isOwner && (
-          <footer className="flex items-center justify-end gap-2 border-t border-zinc-200 px-5 py-3 dark:border-zinc-800">
-            <button
-              onClick={onClose}
-              className="rounded-md px-3 py-1.5 text-sm text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800"
-            >
-              Cancelar
-            </button>
-            <button
-              onClick={save}
-              disabled={saving}
-              className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
-            >
-              {saving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-              Salvar
-            </button>
-          </footer>
-        )}
+        <footer className="flex items-center justify-end gap-2 border-t border-zinc-200 px-5 py-3 dark:border-zinc-800">
+          <button
+            onClick={onClose}
+            className="rounded-md px-3 py-1.5 text-sm text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800"
+          >
+            Cancelar
+          </button>
+          <button
+            onClick={save}
+            // Sem os grants atuais em mãos o save mandaria um conjunto
+            // incompleto e apagaria o que ainda não chegou.
+            disabled={saving || loadingAccess || loadingChannels}
+            className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+          >
+            {saving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+            Salvar
+          </button>
+        </footer>
       </aside>
     </div>
   );
