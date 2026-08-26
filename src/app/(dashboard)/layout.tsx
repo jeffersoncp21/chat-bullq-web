@@ -69,9 +69,9 @@ export default function DashboardLayout({
         </Navbar>
       }
     >
-      <div className="flex h-full flex-col">
+      <div className="flex flex-1 flex-col min-h-0 w-full">
         <ToolFailureBanner />
-        <div className="flex-1 min-h-0">{children}</div>
+        <div className="flex flex-1 flex-col min-h-0 w-full">{children}</div>
       </div>
     </SidebarLayout>
   );
