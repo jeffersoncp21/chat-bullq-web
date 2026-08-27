@@ -18,6 +18,7 @@ import {
   FolderPlus,
   MailOpen,
   Archive,
+  Pin,
   Tag as TagIcon,
   Layers,
   FolderKanban,
@@ -1038,6 +1039,12 @@ export function ConversationList({ activeId, onSelect, viewId }: ConversationLis
                     <div className={`h-1.5 w-1.5 shrink-0 rounded-full ${statusColors[conv.status] || 'bg-zinc-300'}`} />
                   </div>
                   <div className="flex shrink-0 items-center gap-1.5">
+                    {conv.isPinnedByMe && (
+                      <Pin
+                        className="h-3 w-3 shrink-0 fill-zinc-400 text-zinc-400 dark:fill-zinc-500 dark:text-zinc-500"
+                        aria-label="Fixada"
+                      />
+                    )}
                     <span
                       className={`text-[10px] tabular-nums ${
                         hasUnread
