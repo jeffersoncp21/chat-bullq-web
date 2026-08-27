@@ -13,6 +13,8 @@ import {
   KanbanSquare,
   Archive,
   ArchiveRestore,
+  Pin,
+  PinOff,
   Inbox as InboxIcon,
   Filter,
   Pencil,
@@ -52,9 +54,11 @@ export function ConversationContextMenu({
   const [pendingPipelineId, setPendingPipelineId] = useState<string | null>(null);
   const [pendingViewId, setPendingViewId] = useState<string | null>(null);
   const [archiving, setArchiving] = useState(false);
+  const [pinning, setPinning] = useState(false);
   const [markingUnread, setMarkingUnread] = useState(false);
   const [renameOpen, setRenameOpen] = useState(false);
   const isArchived = (conversation as any).isArchived === true;
+  const isPinned = (conversation as any).isPinnedByMe === true;
   const alreadyUnread = (conversation.unreadCount ?? 0) > 0;
 
   const { data: tags = [], isLoading } = useQuery({
@@ -218,6 +222,26 @@ export function ConversationContextMenu({
     }
   };
 
+  const togglePin = async () => {
+    setPinning(true);
+    try {
+      if (isPinned) {
+        await inboxService.unpin(conversation.id);
+        toast.success('Conversa desafixada');
+      } else {
+        await inboxService.pin(conversation.id);
+        toast.success('Conversa fixada');
+      }
+      queryClient.invalidateQueries({ queryKey: ['conversations'] });
+      queryClient.invalidateQueries({ queryKey: ['conversations-pinned'] });
+      onClose();
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || 'Erro ao fixar conversa');
+    } finally {
+      setPinning(false);
+    }
+  };
+
   const addToPipeline = async (pipelineId: string, pipelineName: string) => {
     setPendingPipelineId(pipelineId);
     try {
@@ -344,6 +368,20 @@ export function ConversationContextMenu({
               <Mail className="h-3.5 w-3.5 shrink-0 text-zinc-500 dark:text-zinc-400" />
             )}
             <span className="flex-1">Marcar como não-lida</span>
+          </button>
+          <button
+            onClick={togglePin}
+            disabled={pinning}
+            className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-1.5 text-left text-[13px] text-zinc-700 transition-colors hover:bg-zinc-50 disabled:opacity-60 dark:text-zinc-300 dark:hover:bg-zinc-800/60"
+          >
+            {pinning ? (
+              <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-zinc-400" />
+            ) : isPinned ? (
+              <PinOff className="h-3.5 w-3.5 shrink-0 text-zinc-500 dark:text-zinc-400" />
+            ) : (
+              <Pin className="h-3.5 w-3.5 shrink-0 text-zinc-500 dark:text-zinc-400" />
+            )}
+            <span className="flex-1">{isPinned ? 'Desafixar' : 'Fixar'}</span>
           </button>
           <button
             onClick={toggleArchive}

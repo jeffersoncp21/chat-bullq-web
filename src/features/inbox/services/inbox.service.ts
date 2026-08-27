@@ -51,6 +51,11 @@ export interface Conversation {
   isGroup: boolean;
   isArchived?: boolean;
   archivedAt?: string | null;
+  /** true quando o usuário LOGADO fixou esta conversa (per-user — nunca
+   *  reflete o pin de outro usuário). Rows de GET /conversations nunca vêm
+   *  true (fixadas são excluídas dessa lista); rows de
+   *  GET /conversations/pinned sempre vêm true. */
+  isPinnedByMe?: boolean;
   lastMessageAt: string | null;
   createdAt: string;
   aiEnabled?: boolean | null;
@@ -379,6 +384,23 @@ export const inboxService = {
 
   async unarchive(conversationId: string): Promise<Conversation> {
     const { data } = await api.post(`/conversations/${conversationId}/unarchive`);
+    return data.data;
+  },
+
+  async pin(conversationId: string): Promise<{ ok: boolean; pinned: boolean }> {
+    const { data } = await api.post(`/conversations/${conversationId}/pin`);
+    return data.data ?? data;
+  },
+
+  async unpin(conversationId: string): Promise<{ ok: boolean; pinned: boolean }> {
+    const { data } = await api.post(`/conversations/${conversationId}/unpin`);
+    return data.data ?? data;
+  },
+
+  async getPinnedConversations(
+    params?: Record<string, string>,
+  ): Promise<{ conversations: Conversation[] }> {
+    const { data } = await api.get('/conversations/pinned', { params });
     return data.data;
   },
 
