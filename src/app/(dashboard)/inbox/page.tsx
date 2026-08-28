@@ -133,11 +133,15 @@ export default function InboxPage() {
   }, [queryClient, activeConversation]);
 
   return (
-    <div className="flex h-full">
+    <div className="flex h-full min-h-0">
+      {/* Mobile (< md): painel único — lista OU conversa, nunca os dois.
+          A conversa aberta esconde a lista; o botão voltar do header
+          (onBack) traz a lista de volta. Desktop segue lado a lado. */}
       <ConversationList
         activeId={activeConversation?.id || null}
         onSelect={setActiveConversation}
         viewId={viewId}
+        className={activeConversation ? 'max-md:hidden' : ''}
       />
 
       {activeConversation ? (
@@ -150,6 +154,7 @@ export default function InboxPage() {
             agentLogsOpen={agentLogsOpen}
             onToggleProject={toggleProjectPanel}
             projectOpen={projectPanelOpen}
+            onBack={() => setActiveConversation(null)}
           />
           {agentLogsOpen && (
             <AgentRunsSidebar
@@ -167,7 +172,7 @@ export default function InboxPage() {
           )}
         </>
       ) : (
-        <div className="flex flex-1 flex-col items-center justify-center bg-zinc-50 dark:bg-zinc-900/50">
+        <div className="flex flex-1 flex-col items-center justify-center bg-zinc-50 max-md:hidden dark:bg-zinc-900/50">
           <div className="flex h-20 w-20 items-center justify-center rounded-2xl bg-zinc-100 dark:bg-zinc-800">
             <MessageSquare className="h-10 w-10 text-zinc-300 dark:text-zinc-600" />
           </div>

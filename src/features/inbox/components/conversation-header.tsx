@@ -14,6 +14,7 @@ import {
   Send,
   Activity,
   FolderKanban,
+  ArrowLeft,
 } from 'lucide-react';
 import { ConversationAiToggle } from './conversation-ai-toggle';
 import { AssignmentPopover } from './assignment-popover';
@@ -30,6 +31,8 @@ interface ConversationHeaderProps {
   /** When provided + conversation is a group, renders the Project panel toggle. */
   onToggleProject?: () => void;
   projectOpen?: boolean;
+  /** Mobile only: volta pra lista de conversas (layout de painel único). */
+  onBack?: () => void;
 }
 
 function ChannelBadge({ type, name }: { type: string; name: string }) {
@@ -70,11 +73,11 @@ function ChannelBadge({ type, name }: { type: string; name: string }) {
   return (
     <span
       title={name}
-      className={`mt-1 inline-flex w-fit items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide ${cls}`}
+      className={`mt-1 inline-flex w-fit max-w-full items-center gap-1 overflow-hidden rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide ${cls}`}
     >
-      <Icon className="h-3 w-3" />
+      <Icon className="h-3 w-3 shrink-0" />
       {label}
-      <span className="font-normal normal-case opacity-70">· {name}</span>
+      <span className="truncate font-normal normal-case opacity-70">· {name}</span>
     </span>
   );
 }
@@ -106,6 +109,7 @@ export function ConversationHeader({
   agentLogsOpen,
   onToggleProject,
   projectOpen,
+  onBack,
 }: ConversationHeaderProps) {
   const queryClient = useQueryClient();
   const [isLoading, setIsLoading] = useState(false);
@@ -146,18 +150,28 @@ export function ConversationHeader({
   };
 
   return (
-    <div className="flex items-center justify-between border-b border-zinc-200 bg-white px-4 py-3 dark:border-zinc-800 dark:bg-zinc-950">
-      <div className="flex items-center gap-3">
+    <div className="flex items-center justify-between gap-2 border-b border-zinc-200 bg-white px-4 py-3 max-md:px-2 dark:border-zinc-800 dark:bg-zinc-950">
+      <div className="flex min-w-0 flex-1 items-center gap-3 max-md:gap-2">
+        {onBack && (
+          <button
+            type="button"
+            onClick={onBack}
+            aria-label="Voltar pra lista de conversas"
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900 md:hidden dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
+          >
+            <ArrowLeft className="h-5 w-5" />
+          </button>
+        )}
         <HeaderAvatar
           name={conversation.contact.name}
           avatarUrl={conversation.contact.avatarUrl}
         />
-        <div className="flex flex-col">
-          <div className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+        <div className="flex min-w-0 flex-col">
+          <div className="truncate text-sm font-semibold text-zinc-900 dark:text-zinc-100">
             {conversation.contact.name || conversation.contact.phone || 'Desconhecido'}
           </div>
           {conversation.contact.phone && conversation.contact.name && (
-            <div className="text-xs text-zinc-500">{conversation.contact.phone}</div>
+            <div className="truncate text-xs text-zinc-500">{conversation.contact.phone}</div>
           )}
           <ChannelBadge
             type={conversation.channel.type}
@@ -166,7 +180,7 @@ export function ConversationHeader({
         </div>
       </div>
 
-      <div className="flex items-center gap-1.5">
+      <div className="flex shrink-0 items-center gap-1.5 max-md:gap-0.5">
         <AgentPinPopover conversation={conversation} onChanged={onUpdate} />
         <ConversationAiToggle
           conversation={conversation}

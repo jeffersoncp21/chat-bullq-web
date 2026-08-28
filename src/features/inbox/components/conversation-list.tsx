@@ -128,9 +128,11 @@ interface ConversationListProps {
    * still layer on top via query params.
    */
   viewId?: string | null;
+  /** Classes extras no container raiz (ex.: esconder no mobile com conversa aberta). */
+  className?: string;
 }
 
-export function ConversationList({ activeId, onSelect, viewId }: ConversationListProps) {
+export function ConversationList({ activeId, onSelect, viewId, className }: ConversationListProps) {
   const queryClient = useQueryClient();
   const orgId = useOrgId();
   const { on, onReconnect } = useSocket();
@@ -1115,7 +1117,9 @@ export function ConversationList({ activeId, onSelect, viewId }: ConversationLis
   };
 
   return (
-    <div className="flex h-full w-80 flex-col border-r border-zinc-200/80 bg-white dark:border-zinc-800 dark:bg-zinc-950">
+    <div
+      className={`flex h-full w-full flex-col border-r border-zinc-200/80 bg-white md:w-80 dark:border-zinc-800 dark:bg-zinc-950 ${className ?? ''}`}
+    >
       {/* Scope selector (All / Mine) */}
       <div className="px-3 pt-3">
         <Popover className="relative">
