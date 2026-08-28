@@ -18,6 +18,7 @@ import {
   FolderPlus,
   MailOpen,
   Archive,
+  Pin,
   Tag as TagIcon,
   Layers,
   FolderKanban,
@@ -372,6 +373,64 @@ export function ConversationList({ activeId, onSelect, viewId }: ConversationLis
     scrollContainerRef.current?.scrollTo({ top: 0 });
   }, [filterKey, debouncedSearch, selectedChannelId, selectedSegmentId, scope, showGroups, tagsKey]);
 
+  // Filtros que unificam por grupo (segmento OU projeto) — são sempre
+  // grupos: força groups=only e ignora o filtro de canal. Segmento tem
+  // precedência se ambos estiverem ativos.
+  const hasProjectFilter =
+    !!selectedProjectStatus || (mineProjects && !!currentUserId);
+
+  // Params compartilhados entre a lista paginada e a seção "Fixadas" — os
+  // dois precisam respeitar exatamente os mesmos filtros (busca, canal,
+  // tags, grupos, não lidas) pra não divergir.
+  const buildListParams = useCallback((): Record<string, string> => {
+    const params: Record<string, string> = {};
+    if (unreadOnly) params.unread = 'true';
+    // archived: dentro de view, só passa quando user explicitamente
+    // ativou (override). Fora de view, passa sempre o estado atual.
+    if (viewId) {
+      if (archivedOnly) params.archived = 'only';
+    } else {
+      params.archived = archivedOnly ? 'only' : 'exclude';
+    }
+    if (selectedSegmentId) {
+      params.segmentId = selectedSegmentId;
+      params.groups = 'only';
+    } else if (hasProjectFilter) {
+      if (selectedProjectStatus) params.projectStatus = selectedProjectStatus;
+      if (mineProjects && currentUserId)
+        params.responsibleUserId = currentUserId;
+      params.groups = 'only';
+    } else {
+      // groups: dentro de view, só override se user MARCOU "Grupos"
+      // explicitamente (vira 'only' pra forçar). Fora de view, default
+      // esconde grupos (regra do JP).
+      if (viewId) {
+        if (showGroups) params.groups = 'only';
+      } else {
+        if (!showGroups) params.groups = 'exclude';
+      }
+      if (selectedChannelId) params.channelId = selectedChannelId;
+    }
+    if (debouncedSearch) params.search = debouncedSearch;
+    if (selectedTagIds.length > 0) params.tagIds = selectedTagIds.join(',');
+    if (scope === 'MINE' && currentUserId) params.assignedToId = currentUserId;
+    return params;
+  }, [
+    unreadOnly,
+    archivedOnly,
+    viewId,
+    selectedSegmentId,
+    hasProjectFilter,
+    selectedProjectStatus,
+    mineProjects,
+    currentUserId,
+    showGroups,
+    selectedChannelId,
+    debouncedSearch,
+    selectedTagIds,
+    scope,
+  ]);
+
   const {
     data,
     isLoading,
@@ -381,42 +440,11 @@ export function ConversationList({ activeId, onSelect, viewId }: ConversationLis
   } = useInfiniteQuery({
     queryKey: ['conversations', orgId, viewId ?? null, filterKey, debouncedSearch, selectedChannelId, selectedSegmentId, scope, currentUserId],
     queryFn: ({ pageParam = 1 }) => {
-      const params: Record<string, string> = { limit: '30', page: String(pageParam) };
-      if (unreadOnly) params.unread = 'true';
-      // archived: dentro de view, só passa quando user explicitamente
-      // ativou (override). Fora de view, passa sempre o estado atual.
-      if (viewId) {
-        if (archivedOnly) params.archived = 'only';
-      } else {
-        params.archived = archivedOnly ? 'only' : 'exclude';
-      }
-      // Filtros que unificam por grupo (segmento OU projeto) — são sempre
-      // grupos: força groups=only e ignora o filtro de canal. Segmento tem
-      // precedência se ambos estiverem ativos.
-      const hasProjectFilter =
-        !!selectedProjectStatus || (mineProjects && !!currentUserId);
-      if (selectedSegmentId) {
-        params.segmentId = selectedSegmentId;
-        params.groups = 'only';
-      } else if (hasProjectFilter) {
-        if (selectedProjectStatus) params.projectStatus = selectedProjectStatus;
-        if (mineProjects && currentUserId)
-          params.responsibleUserId = currentUserId;
-        params.groups = 'only';
-      } else {
-        // groups: dentro de view, só override se user MARCOU "Grupos"
-        // explicitamente (vira 'only' pra forçar). Fora de view, default
-        // esconde grupos (regra do JP).
-        if (viewId) {
-          if (showGroups) params.groups = 'only';
-        } else {
-          if (!showGroups) params.groups = 'exclude';
-        }
-        if (selectedChannelId) params.channelId = selectedChannelId;
-      }
-      if (debouncedSearch) params.search = debouncedSearch;
-      if (selectedTagIds.length > 0) params.tagIds = selectedTagIds.join(',');
-      if (scope === 'MINE' && currentUserId) params.assignedToId = currentUserId;
+      const params: Record<string, string> = {
+        limit: '30',
+        page: String(pageParam),
+        ...buildListParams(),
+      };
       if (viewId) {
         return inboxViewsService.getConversations(viewId, params);
       }
@@ -438,10 +466,37 @@ export function ConversationList({ activeId, onSelect, viewId }: ConversationLis
     [data],
   );
 
+  // Seção "Fixadas" (per-user) — só na inbox padrão: fora de views
+  // customizadas, sem filtro de segmento/projeto (esses resolvem
+  // conversationIds por conta própria) e nunca dentro do filtro
+  // "Arquivadas" (arquivar vence sobre fixar).
+  const pinnedEnabled =
+    !viewId && !selectedSegmentId && !hasProjectFilter && !archivedOnly && !!currentUserId;
+
+  const { data: pinnedData } = useQuery({
+    queryKey: [
+      'conversations-pinned',
+      orgId,
+      filterKey,
+      debouncedSearch,
+      selectedChannelId,
+      scope,
+      currentUserId,
+    ],
+    queryFn: () => inboxService.getPinnedConversations(buildListParams()),
+    enabled: pinnedEnabled,
+    staleTime: 15000,
+  });
+  const pinnedConversations = pinnedData?.conversations ?? [];
+
   // Total count from the paginated response — same value across pages
-  // (it's the count(where) from Postgres). Used to show "Não lidas (N)"
-  // in the active filter chip.
-  const totalCount = data?.pages?.[0]?.pagination?.total ?? 0;
+  // (it's the count(where) from Postgres). Fixadas saem dessa contagem por
+  // construção (a lista paginada as exclui), então somamos de volta quando
+  // "Não lidas" está ativo — nesse estado a seção fixa só retorna itens não
+  // lidos (buildListParams já propaga `unread=true` pra ela também).
+  const totalCount =
+    (data?.pages?.[0]?.pagination?.total ?? 0) +
+    (unreadOnly ? pinnedConversations.length : 0);
 
   // Infinite scroll via IntersectionObserver
   useEffect(() => {
@@ -668,10 +723,17 @@ export function ConversationList({ activeId, onSelect, viewId }: ConversationLis
       // had previously dropped from.
       queryClient.invalidateQueries({ queryKey: ['conversations'] });
     });
+    // Sincroniza o pin entre abas/dispositivos do mesmo usuário (emitido
+    // via emitToUser, então só chega pra quem fixou/desfixou).
+    const unsubPin = on('conversation:pin-updated', () => {
+      queryClient.invalidateQueries({ queryKey: ['conversations-pinned'] });
+      queryClient.invalidateQueries({ queryKey: ['conversations'] });
+    });
     // Reconnect: any events that fired while we were offline are gone, so
     // sync the list from scratch when the socket comes back.
     const unsubReconnect = onReconnect(() => {
       queryClient.invalidateQueries({ queryKey: ['conversations'] });
+      queryClient.invalidateQueries({ queryKey: ['conversations-pinned'] });
       queryClient.invalidateQueries({ queryKey: ['inbox-views'] });
     });
     return () => {
@@ -681,6 +743,7 @@ export function ConversationList({ activeId, onSelect, viewId }: ConversationLis
       unsubAvatar?.();
       unsubRead?.();
       unsubUnread?.();
+      unsubPin?.();
       unsubReconnect?.();
     };
   }, [on, onReconnect, queryClient]);
@@ -841,6 +904,214 @@ export function ConversationList({ activeId, onSelect, viewId }: ConversationLis
       return d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
     }
     return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+  };
+
+  // Clique numa linha da seção "Fixadas" — não participa de seleção em
+  // massa/shift-click (essas linhas ficam fora do array `conversations`,
+  // então índices de range-select não fazem sentido pra elas). Só abre a
+  // conversa e marca como lida, mesmo efeito colateral de
+  // handleConversationClick, só que restrito ao cache de `conversations-pinned`.
+  const handlePinnedRowClick = useCallback(
+    (conv: Conversation) => {
+      onSelect(conv);
+      if ((conv.unreadCount ?? 0) > 0) {
+        const lastMsgId = conv.messages?.[0]?.id;
+        queryClient.setQueriesData<any>(
+          { queryKey: ['conversations-pinned'] },
+          (old: any) => {
+            if (!old?.conversations) return old;
+            return {
+              ...old,
+              conversations: old.conversations.map((c: Conversation) =>
+                c.id === conv.id ? { ...c, unreadCount: 0 } : c,
+              ),
+            };
+          },
+        );
+        inboxService.markAsRead(conv.id, lastMsgId).catch(() => {
+          queryClient.invalidateQueries({ queryKey: ['conversations-pinned'] });
+        });
+      }
+    },
+    [onSelect, queryClient],
+  );
+
+  // Reaproveitado pela lista paginada (selectable=true, participa de
+  // seleção em massa) e pela seção "Fixadas" (selectable=false).
+  const renderConversationRow = (
+    conv: Conversation,
+    index: number,
+    selectable: boolean,
+  ) => {
+    const isActive = conv.id === activeId;
+    const isSelected = selectable && selectedIds.has(conv.id);
+    const inSelectionMode = selectable && selectedIds.size > 0;
+    return (
+      <button
+        key={conv.id}
+        onClick={(e) =>
+          selectable
+            ? handleConversationClick(conv, index, e)
+            : handlePinnedRowClick(conv)
+        }
+        onContextMenu={(e) => {
+          e.preventDefault();
+          setContextMenu({
+            conversation: conv,
+            position: { x: e.clientX, y: e.clientY },
+          });
+        }}
+        className={`group flex w-full gap-3 px-3 py-2.5 text-left transition-colors duration-100 ${
+          isSelected
+            ? 'bg-primary/[0.06] dark:bg-primary/10'
+            : isActive
+              ? 'bg-primary/[0.06] dark:bg-primary/10'
+              : 'hover:bg-zinc-50 dark:hover:bg-zinc-900/60'
+        }`}
+      >
+        <div className="group/avatar relative shrink-0">
+          {/* Avatar visível por padrão; some no hover (ou se está selecionado / em selection mode) pra dar lugar à checkbox. */}
+          <div
+            className={`${
+              inSelectionMode || isSelected
+                ? 'invisible'
+                : 'group-hover/avatar:invisible'
+            }`}
+          >
+            <ListAvatar
+              name={conv.contact.name}
+              avatarUrl={conv.contact.avatarUrl}
+            />
+          </div>
+          {/* Checkbox: aparece no hover sempre, fica visível travada
+              quando já tem seleção ativa ou esse item é parte dela.
+              Fora da lista paginada (seção "Fixadas") não existe seleção
+              em massa, então nem renderiza. */}
+          {selectable && (
+            <div
+              role="checkbox"
+              aria-checked={isSelected}
+              onClick={(e) => {
+                e.stopPropagation();
+                toggleSelect(conv.id, index);
+              }}
+              className={`absolute inset-0 flex h-10 w-10 cursor-pointer items-center justify-center rounded-full border-2 transition-colors ${
+                isSelected
+                  ? 'border-primary bg-primary text-white opacity-100'
+                  : inSelectionMode
+                    ? 'border-zinc-300 bg-zinc-100 text-transparent hover:border-primary/50 dark:border-zinc-600 dark:bg-zinc-800'
+                    : 'border-zinc-300 bg-white text-transparent opacity-0 hover:border-primary/50 group-hover/avatar:opacity-100 dark:border-zinc-600 dark:bg-zinc-900'
+              }`}
+              title={isSelected ? 'Desmarcar' : 'Selecionar'}
+            >
+              <Check className="h-4 w-4" />
+            </div>
+          )}
+          {(() => {
+            const ChannelIcon = channelIcons[conv.channel.type] || MessageSquare;
+            return (
+              <div className="absolute -bottom-0.5 -right-0.5 flex h-4.5 w-4.5 items-center justify-center rounded-full border-2 border-white bg-white dark:border-zinc-950 dark:bg-zinc-900">
+                <ChannelIcon className="h-3 w-3 text-zinc-500 dark:text-zinc-400" />
+              </div>
+            );
+          })()}
+        </div>
+        <div className="min-w-0 flex-1">
+          {(() => {
+            const unread = conv.unreadCount ?? 0;
+            const hasUnread = unread > 0;
+            return (
+              <>
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <span
+                      className={`truncate text-[13px] ${
+                        hasUnread
+                          ? 'font-bold text-zinc-900 dark:text-zinc-50'
+                          : 'font-medium ' +
+                            (isActive || isSelected
+                              ? 'text-zinc-900 dark:text-zinc-100'
+                              : 'text-zinc-800 dark:text-zinc-200')
+                      }`}
+                    >
+                      {conv.contact.name || conv.contact.phone || 'Desconhecido'}
+                    </span>
+                    <div className={`h-1.5 w-1.5 shrink-0 rounded-full ${statusColors[conv.status] || 'bg-zinc-300'}`} />
+                  </div>
+                  <div className="flex shrink-0 items-center gap-1.5">
+                    {conv.isPinnedByMe && (
+                      <Pin
+                        className="h-3 w-3 shrink-0 fill-zinc-400 text-zinc-400 dark:fill-zinc-500 dark:text-zinc-500"
+                        aria-label="Fixada"
+                      />
+                    )}
+                    <span
+                      className={`text-[10px] tabular-nums ${
+                        hasUnread
+                          ? 'font-semibold text-red-600 dark:text-red-400'
+                          : 'text-zinc-400 dark:text-zinc-500'
+                      }`}
+                    >
+                      {formatTime(conv.messages[0]?.createdAt ?? conv.lastMessageAt)}
+                    </span>
+                  </div>
+                </div>
+                <div className="mt-0.5 flex items-center justify-between gap-1.5">
+                  <p
+                    className={`truncate text-[12px] ${
+                      hasUnread
+                        ? 'font-semibold text-zinc-700 dark:text-zinc-200'
+                        : 'text-zinc-500 dark:text-zinc-400'
+                    }`}
+                  >
+                    {getLastMessagePreview(conv)}
+                  </p>
+                  {hasUnread && (
+                    <span className="ml-1 inline-flex h-[18px] min-w-[18px] shrink-0 items-center justify-center rounded-full bg-red-500 px-1.5 text-[10px] font-bold leading-none text-white">
+                      {unread > 9 ? '9+' : unread}
+                    </span>
+                  )}
+                </div>
+              </>
+            );
+          })()}
+          {(conv.tags?.length || conv.contact.tags?.length) ? (
+            <div className="mt-1 flex flex-wrap gap-1">
+              {conv.tags?.map((t) => (
+                <span
+                  key={`c-${t.tag.id}`}
+                  title={`Tag na conversa: ${t.tag.name}`}
+                  className="inline-flex items-center gap-1 rounded-full px-1.5 py-px text-[10px] font-medium"
+                  style={{
+                    backgroundColor: `${t.tag.color}1f`,
+                    color: t.tag.color,
+                  }}
+                >
+                  <span
+                    className="h-1.5 w-1.5 rounded-full"
+                    style={{ backgroundColor: t.tag.color }}
+                  />
+                  {t.tag.name}
+                </span>
+              ))}
+              {conv.contact.tags?.map((t) => (
+                <span
+                  key={`ct-${t.tag.id}`}
+                  title={`Tag no contato: ${t.tag.name}`}
+                  className="inline-flex items-center gap-1 rounded-full border border-dashed px-1.5 py-px text-[10px] font-medium"
+                  style={{
+                    borderColor: `${t.tag.color}80`,
+                    color: t.tag.color,
+                  }}
+                >
+                  {t.tag.name}
+                </span>
+              ))}
+            </div>
+          ) : null}
+        </div>
+      </button>
+    );
   };
 
   return (
@@ -1372,6 +1643,19 @@ export function ConversationList({ activeId, onSelect, viewId }: ConversationLis
         <div className="mx-3 border-t border-zinc-100 dark:border-zinc-800/60" />
       )}
 
+      {/* Fixadas — per-user, sempre visível por padrão (elevada ao topo),
+          scroll próprio pra não empurrar a lista principal quando há muitas. */}
+      {pinnedEnabled && pinnedConversations.length > 0 && (
+        <div className="max-h-[280px] shrink-0 overflow-y-auto scrollbar-thin border-b border-zinc-100 dark:border-zinc-800/60">
+          <div className="px-3 pt-2 pb-1 text-[11px] font-medium uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
+            Fixadas
+          </div>
+          {pinnedConversations.map((conv, index) =>
+            renderConversationRow(conv, index, false),
+          )}
+        </div>
+      )}
+
       {/* Conversation list */}
       <div ref={scrollContainerRef} className="flex-1 overflow-y-auto scrollbar-thin">
         {isLoading ? (
@@ -1403,163 +1687,9 @@ export function ConversationList({ activeId, onSelect, viewId }: ConversationLis
           </div>
         ) : (
           <>
-            {conversations.map((conv, index) => {
-              const isActive = conv.id === activeId;
-              const isSelected = selectedIds.has(conv.id);
-              const inSelectionMode = selectedIds.size > 0;
-              return (
-                <button
-                  key={conv.id}
-                  onClick={(e) => handleConversationClick(conv, index, e)}
-                  onContextMenu={(e) => {
-                    e.preventDefault();
-                    setContextMenu({
-                      conversation: conv,
-                      position: { x: e.clientX, y: e.clientY },
-                    });
-                  }}
-                  className={`group flex w-full gap-3 px-3 py-2.5 text-left transition-colors duration-100 ${
-                    isSelected
-                      ? 'bg-primary/[0.06] dark:bg-primary/10'
-                      : isActive
-                        ? 'bg-primary/[0.06] dark:bg-primary/10'
-                        : 'hover:bg-zinc-50 dark:hover:bg-zinc-900/60'
-                  }`}
-                >
-                  <div className="group/avatar relative shrink-0">
-                    {/* Avatar visível por padrão; some no hover (ou se está selecionado / em selection mode) pra dar lugar à checkbox. */}
-                    <div
-                      className={`${
-                        inSelectionMode || isSelected
-                          ? 'invisible'
-                          : 'group-hover/avatar:invisible'
-                      }`}
-                    >
-                      <ListAvatar
-                        name={conv.contact.name}
-                        avatarUrl={conv.contact.avatarUrl}
-                      />
-                    </div>
-                    {/* Checkbox: aparece no hover sempre, fica visível travada
-                        quando já tem seleção ativa ou esse item é parte dela. */}
-                    <div
-                      role="checkbox"
-                      aria-checked={isSelected}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        toggleSelect(conv.id, index);
-                      }}
-                      className={`absolute inset-0 flex h-10 w-10 cursor-pointer items-center justify-center rounded-full border-2 transition-colors ${
-                        isSelected
-                          ? 'border-primary bg-primary text-white opacity-100'
-                          : inSelectionMode
-                            ? 'border-zinc-300 bg-zinc-100 text-transparent hover:border-primary/50 dark:border-zinc-600 dark:bg-zinc-800'
-                            : 'border-zinc-300 bg-white text-transparent opacity-0 hover:border-primary/50 group-hover/avatar:opacity-100 dark:border-zinc-600 dark:bg-zinc-900'
-                      }`}
-                      title={isSelected ? 'Desmarcar' : 'Selecionar'}
-                    >
-                      <Check className="h-4 w-4" />
-                    </div>
-                    {(() => {
-                      const ChannelIcon = channelIcons[conv.channel.type] || MessageSquare;
-                      return (
-                        <div className="absolute -bottom-0.5 -right-0.5 flex h-4.5 w-4.5 items-center justify-center rounded-full border-2 border-white bg-white dark:border-zinc-950 dark:bg-zinc-900">
-                          <ChannelIcon className="h-3 w-3 text-zinc-500 dark:text-zinc-400" />
-                        </div>
-                      );
-                    })()}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    {(() => {
-                      const unread = conv.unreadCount ?? 0;
-                      const hasUnread = unread > 0;
-                      return (
-                        <>
-                          <div className="flex items-center justify-between gap-2">
-                            <div className="flex items-center gap-1.5 min-w-0">
-                              <span
-                                className={`truncate text-[13px] ${
-                                  hasUnread
-                                    ? 'font-bold text-zinc-900 dark:text-zinc-50'
-                                    : 'font-medium ' +
-                                      (isActive || isSelected
-                                        ? 'text-zinc-900 dark:text-zinc-100'
-                                        : 'text-zinc-800 dark:text-zinc-200')
-                                }`}
-                              >
-                                {conv.contact.name || conv.contact.phone || 'Desconhecido'}
-                              </span>
-                              <div className={`h-1.5 w-1.5 shrink-0 rounded-full ${statusColors[conv.status] || 'bg-zinc-300'}`} />
-                            </div>
-                            <div className="flex shrink-0 items-center gap-1.5">
-                              <span
-                                className={`text-[10px] tabular-nums ${
-                                  hasUnread
-                                    ? 'font-semibold text-red-600 dark:text-red-400'
-                                    : 'text-zinc-400 dark:text-zinc-500'
-                                }`}
-                              >
-                                {formatTime(conv.messages[0]?.createdAt ?? conv.lastMessageAt)}
-                              </span>
-                            </div>
-                          </div>
-                          <div className="mt-0.5 flex items-center justify-between gap-1.5">
-                            <p
-                              className={`truncate text-[12px] ${
-                                hasUnread
-                                  ? 'font-semibold text-zinc-700 dark:text-zinc-200'
-                                  : 'text-zinc-500 dark:text-zinc-400'
-                              }`}
-                            >
-                              {getLastMessagePreview(conv)}
-                            </p>
-                            {hasUnread && (
-                              <span className="ml-1 inline-flex h-[18px] min-w-[18px] shrink-0 items-center justify-center rounded-full bg-red-500 px-1.5 text-[10px] font-bold leading-none text-white">
-                                {unread > 9 ? '9+' : unread}
-                              </span>
-                            )}
-                          </div>
-                        </>
-                      );
-                    })()}
-                    {(conv.tags?.length || conv.contact.tags?.length) ? (
-                      <div className="mt-1 flex flex-wrap gap-1">
-                        {conv.tags?.map((t) => (
-                          <span
-                            key={`c-${t.tag.id}`}
-                            title={`Tag na conversa: ${t.tag.name}`}
-                            className="inline-flex items-center gap-1 rounded-full px-1.5 py-px text-[10px] font-medium"
-                            style={{
-                              backgroundColor: `${t.tag.color}1f`,
-                              color: t.tag.color,
-                            }}
-                          >
-                            <span
-                              className="h-1.5 w-1.5 rounded-full"
-                              style={{ backgroundColor: t.tag.color }}
-                            />
-                            {t.tag.name}
-                          </span>
-                        ))}
-                        {conv.contact.tags?.map((t) => (
-                          <span
-                            key={`ct-${t.tag.id}`}
-                            title={`Tag no contato: ${t.tag.name}`}
-                            className="inline-flex items-center gap-1 rounded-full border border-dashed px-1.5 py-px text-[10px] font-medium"
-                            style={{
-                              borderColor: `${t.tag.color}80`,
-                              color: t.tag.color,
-                            }}
-                          >
-                            {t.tag.name}
-                          </span>
-                        ))}
-                      </div>
-                    ) : null}
-                  </div>
-                </button>
-              );
-            })}
+            {conversations.map((conv, index) =>
+              renderConversationRow(conv, index, true),
+            )}
             {/* Sentinel for infinite scroll */}
             <div ref={sentinelRef} className="h-1" />
             {isFetchingNextPage && (
