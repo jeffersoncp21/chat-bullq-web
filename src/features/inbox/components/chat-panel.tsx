@@ -873,7 +873,7 @@ export function ChatPanel({
     // pelo conteúdo (default min-height de flex children) e empurra o
     // ChatInput pra fora do painel — quebra dramaticamente quando o pai
     // é um modal com altura fixa.
-    <div className="flex min-h-0 flex-1 flex-col">
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col">
       <ConversationHeader
         conversation={conversation}
         onUpdate={onConversationUpdate}
