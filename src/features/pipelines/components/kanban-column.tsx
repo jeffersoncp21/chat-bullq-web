@@ -7,6 +7,7 @@ import type {
   CardSummary,
   PipelineStage,
 } from '../services/pipelines.service';
+import { cardValue, formatBRL } from '../lib/card-values';
 
 const STAGE_COLOR: Record<string, string> = {
   zinc: 'border-zinc-300 bg-zinc-50 dark:bg-zinc-900',
@@ -44,49 +45,51 @@ export function KanbanColumn({ stage, cards, onAddCard, onCardClick }: Props) {
   const colorKey = stage.color ?? 'zinc';
   const headerCls = STAGE_COLOR[colorKey] ?? STAGE_COLOR.zinc;
   const pillCls = PILL_COLOR[colorKey] ?? PILL_COLOR.zinc;
-  const totalValue = cards.reduce((acc, c) => {
-    const n = typeof c.value === 'string' ? parseFloat(c.value) : c.value ?? 0;
-    return acc + (Number.isFinite(n) ? (n as number) : 0);
-  }, 0);
-  const totalLabel =
-    totalValue > 0
-      ? new Intl.NumberFormat('pt-BR', {
-          style: 'currency',
-          currency: 'BRL',
-          maximumFractionDigits: 0,
-        }).format(totalValue)
-      : null;
+  // Soma das cartas da etapa, mostrada no topo da coluna.
+  const totalValue = cards.reduce((acc, c) => acc + cardValue(c), 0);
+  const semValor = cards.filter((c) => cardValue(c) <= 0).length;
 
   return (
     <div className="flex h-full w-72 shrink-0 flex-col">
-      <div
-        className={`flex items-center justify-between gap-2 rounded-t-lg border-b-2 px-3 py-2 ${headerCls}`}
-      >
-        <div className="flex min-w-0 items-center gap-2">
-          {stage.type === 'WON' && (
-            <Trophy className="h-3.5 w-3.5 shrink-0 text-green-600" />
-          )}
-          {stage.type === 'LOST' && (
-            <XIcon className="h-3.5 w-3.5 shrink-0 text-red-600" />
-          )}
-          <span className="truncate text-xs font-semibold uppercase tracking-wide text-zinc-700 dark:text-zinc-200">
-            {stage.name}
-          </span>
-          <span
-            className={`inline-flex items-center justify-center rounded-full px-1.5 py-0.5 text-[10px] font-bold ${pillCls}`}
+      <div className={`rounded-t-lg border-b-2 px-3 py-2 ${headerCls}`}>
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex min-w-0 items-center gap-2">
+            {stage.type === 'WON' && (
+              <Trophy className="h-3.5 w-3.5 shrink-0 text-green-600" />
+            )}
+            {stage.type === 'LOST' && (
+              <XIcon className="h-3.5 w-3.5 shrink-0 text-red-600" />
+            )}
+            <span className="truncate text-xs font-semibold uppercase tracking-wide text-zinc-700 dark:text-zinc-200">
+              {stage.name}
+            </span>
+            <span
+              className={`inline-flex items-center justify-center rounded-full px-1.5 py-0.5 text-[10px] font-bold ${pillCls}`}
+            >
+              {cards.length}
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={onAddCard}
+            className="rounded-md p-1 text-zinc-500 transition-colors hover:bg-white/50 hover:text-zinc-900 dark:hover:bg-zinc-800/60 dark:hover:text-zinc-100"
+            aria-label="Adicionar conversa"
+            title="Adicionar conversa nessa stage"
           >
-            {cards.length}
-          </span>
+            <Plus className="h-3.5 w-3.5" />
+          </button>
         </div>
-        <button
-          type="button"
-          onClick={onAddCard}
-          className="rounded-md p-1 text-zinc-500 transition-colors hover:bg-white/50 hover:text-zinc-900 dark:hover:bg-zinc-800/60 dark:hover:text-zinc-100"
-          aria-label="Adicionar conversa"
-          title="Adicionar conversa nessa stage"
+        <p
+          className="mt-0.5 truncate text-sm font-semibold tabular-nums text-zinc-800 dark:text-zinc-100"
+          title={`Soma das cartas desta etapa: ${formatBRL(totalValue)}`}
         >
-          <Plus className="h-3.5 w-3.5" />
-        </button>
+          {formatBRL(totalValue)}
+          {semValor > 0 && (
+            <span className="ml-1.5 text-[10px] font-normal text-zinc-500 dark:text-zinc-400">
+              · {semValor} sem valor
+            </span>
+          )}
+        </p>
       </div>
 
       <div
@@ -105,11 +108,6 @@ export function KanbanColumn({ stage, cards, onAddCard, onCardClick }: Props) {
         {cards.map((c) => (
           <KanbanCard key={c.id} card={c} onClick={() => onCardClick(c)} />
         ))}
-        {totalLabel && (
-          <p className="pt-2 text-center text-[10px] uppercase tracking-wide text-zinc-400">
-            Total: {totalLabel}
-          </p>
-        )}
       </div>
     </div>
   );

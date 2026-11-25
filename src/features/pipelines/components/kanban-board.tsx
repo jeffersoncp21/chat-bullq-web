@@ -15,6 +15,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { pipelinesService, type CardSummary } from '../services/pipelines.service';
 import { KanbanColumn } from './kanban-column';
+import { PipelineKpis } from './pipeline-kpis';
 import { KanbanCard } from './kanban-card';
 import { CardDialog } from './card-dialog';
 import { AddConversationDialog } from './add-conversation-dialog';
@@ -132,21 +133,24 @@ export function KanbanBoard({ pipelineId }: Props) {
         onDragStart={handleDragStart}
         onDragEnd={handleDragEnd}
       >
-        <div className="flex h-full gap-3 overflow-x-auto px-4 pb-4">
-          {board.stages.map((stage) => (
-            <KanbanColumn
-              key={stage.id}
-              stage={stage}
-              cards={board.cards[stage.id] ?? []}
-              onAddCard={() => setAddStageId(stage.id)}
-              onCardClick={(c) => {
-                // Click primário: abre a conversa em popup. Sem conversa
-                // vinculada, cai pra edição do card como fallback.
-                if (c.conversationId) setViewingConvId(c.conversationId);
-                else setEditingCard(c);
-              }}
-            />
-          ))}
+        <div className="flex h-full flex-col">
+          <PipelineKpis board={board} />
+          <div className="flex min-h-0 flex-1 gap-3 overflow-x-auto px-4 pb-4">
+            {board.stages.map((stage) => (
+              <KanbanColumn
+                key={stage.id}
+                stage={stage}
+                cards={board.cards[stage.id] ?? []}
+                onAddCard={() => setAddStageId(stage.id)}
+                onCardClick={(c) => {
+                  // Click primário: abre a conversa em popup. Sem conversa
+                  // vinculada, cai pra edição do card como fallback.
+                  if (c.conversationId) setViewingConvId(c.conversationId);
+                  else setEditingCard(c);
+                }}
+              />
+            ))}
+          </div>
         </div>
         <DragOverlay>
           {activeCard ? <KanbanCard card={activeCard} /> : null}
