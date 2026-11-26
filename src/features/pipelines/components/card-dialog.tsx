@@ -7,6 +7,7 @@ import {
   pipelinesService,
   type CardSummary,
 } from '../services/pipelines.service';
+import { parseBRL, toBRLInput } from '../lib/card-values';
 
 interface Props {
   open: boolean;
@@ -55,7 +56,7 @@ export function CardDialog({
     if (card) {
       setTitle(card.title);
       setDescription(card.description ?? '');
-      setValue(card.value ? String(card.value) : '');
+      setValue(toBRLInput(card.value));
       setClosedReason(card.closedReason ?? '');
     } else {
       setTitle('');
@@ -81,9 +82,13 @@ export function CardDialog({
       toast.error('Título é obrigatório');
       return;
     }
+    const numericValue = parseBRL(value);
+    if (Number.isNaN(numericValue)) {
+      toast.error('Valor inválido. Use por exemplo 150.000 ou 150.000,00');
+      return;
+    }
     setSaving(true);
     try {
-      const numericValue = value ? parseFloat(value.replace(',', '.')) : undefined;
       if (card) {
         await pipelinesService.updateCard(card.id, {
           title: title.trim(),
@@ -166,12 +171,12 @@ export function CardDialog({
 
           <div>
             <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300">
-              Valor (R$)
+              Valor da cota (R$)
             </label>
             <input
               value={value}
               onChange={(e) => setValue(e.target.value)}
-              placeholder="ex: 4500"
+              placeholder="ex: 150.000"
               className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
               inputMode="decimal"
             />

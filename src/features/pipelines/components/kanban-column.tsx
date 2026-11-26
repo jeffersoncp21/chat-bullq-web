@@ -34,9 +34,16 @@ interface Props {
   cards: CardSummary[];
   onAddCard: () => void;
   onCardClick: (card: CardSummary) => void;
+  onCardEdit: (card: CardSummary) => void;
 }
 
-export function KanbanColumn({ stage, cards, onAddCard, onCardClick }: Props) {
+export function KanbanColumn({
+  stage,
+  cards,
+  onAddCard,
+  onCardClick,
+  onCardEdit,
+}: Props) {
   const { setNodeRef, isOver } = useDroppable({
     id: stage.id,
     data: { type: 'stage', stage },
@@ -106,7 +113,12 @@ export function KanbanColumn({ stage, cards, onAddCard, onCardClick }: Props) {
           </p>
         )}
         {cards.map((c) => (
-          <KanbanCard key={c.id} card={c} onClick={() => onCardClick(c)} />
+          <KanbanCard
+            key={c.id}
+            card={c}
+            onClick={() => onCardClick(c)}
+            onEdit={() => onCardEdit(c)}
+          />
         ))}
       </div>
     </div>

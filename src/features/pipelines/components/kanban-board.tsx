@@ -148,6 +148,8 @@ export function KanbanBoard({ pipelineId }: Props) {
                   if (c.conversationId) setViewingConvId(c.conversationId);
                   else setEditingCard(c);
                 }}
+                // Lápis no card: edição sempre, mesmo com conversa vinculada.
+                onCardEdit={(c) => setEditingCard(c)}
               />
             ))}
           </div>

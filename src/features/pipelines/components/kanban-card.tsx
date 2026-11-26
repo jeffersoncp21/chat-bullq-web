@@ -2,7 +2,7 @@
 
 import { useDraggable } from '@dnd-kit/core';
 import { CSS } from '@dnd-kit/utilities';
-import { GripVertical, MessageSquare, User } from 'lucide-react';
+import { GripVertical, MessageSquare, Pencil, User } from 'lucide-react';
 import { ZappfyIcon, MetaIcon, InstagramIcon, GmailIcon } from '@/components/ui/icons';
 import type { CardSummary } from '../services/pipelines.service';
 
@@ -51,9 +51,11 @@ function readKirvano(metadata: Record<string, unknown>): KirvanoMeta | null {
 interface Props {
   card: CardSummary;
   onClick?: () => void;
+  /** Abre a edição do card (título, descrição, valor da cota). */
+  onEdit?: () => void;
 }
 
-export function KanbanCard({ card, onClick }: Props) {
+export function KanbanCard({ card, onClick, onEdit }: Props) {
   const { attributes, listeners, setNodeRef, transform, isDragging } =
     useDraggable({
       id: card.id,
@@ -103,6 +105,21 @@ export function KanbanCard({ card, onClick }: Props) {
             </p>
           )}
         </div>
+        {onEdit && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onEdit();
+            }}
+            onPointerDown={(e) => e.stopPropagation()}
+            className="-mr-1 -mt-1 shrink-0 rounded p-1 text-zinc-400 opacity-60 transition-opacity hover:bg-zinc-100 hover:text-zinc-700 group-hover:opacity-100 dark:hover:bg-zinc-800 dark:hover:text-zinc-200"
+            aria-label="Editar card"
+            title="Editar card (valor da cota, título, descrição)"
+          >
+            <Pencil className="h-3.5 w-3.5" />
+          </button>
+        )}
       </div>
 
       <div className="mt-2 flex items-center gap-2 text-[11px] text-zinc-500">

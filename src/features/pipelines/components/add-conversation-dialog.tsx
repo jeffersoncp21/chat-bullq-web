@@ -5,6 +5,7 @@ import { useQuery } from '@tanstack/react-query';
 import { X, Search, MessageSquare, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { pipelinesService } from '../services/pipelines.service';
+import { parseBRL } from '../lib/card-values';
 import {
   inboxService,
   type Conversation,
@@ -74,9 +75,13 @@ export function AddConversationDialog({
       toast.error('Selecione uma conversa');
       return;
     }
+    const numericValue = parseBRL(value);
+    if (Number.isNaN(numericValue)) {
+      toast.error('Valor inválido. Use por exemplo 150.000 ou 150.000,00');
+      return;
+    }
     setSaving(true);
     try {
-      const numericValue = value ? parseFloat(value.replace(',', '.')) : undefined;
       await pipelinesService.createCard(pipelineId, {
         conversationId: pickedId,
         stageId: stageId ?? undefined,
@@ -181,12 +186,12 @@ export function AddConversationDialog({
 
         <div className="border-t border-zinc-200 px-6 py-3 dark:border-zinc-800">
           <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300">
-            Valor estimado (R$) — opcional
+            Valor da cota (R$) — opcional
           </label>
           <input
             value={value}
             onChange={(e) => setValue(e.target.value)}
-            placeholder="ex: 4500"
+            placeholder="ex: 150.000"
             inputMode="decimal"
             className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
           />
