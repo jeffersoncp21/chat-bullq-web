@@ -35,6 +35,8 @@ interface Props {
   onAddCard: () => void;
   onCardClick: (card: CardSummary) => void;
   onCardEdit: (card: CardSummary) => void;
+  /** A busca do quadro está ativa: `cards` já vem filtrado. */
+  filtrando?: boolean;
 }
 
 export function KanbanColumn({
@@ -43,6 +45,7 @@ export function KanbanColumn({
   onAddCard,
   onCardClick,
   onCardEdit,
+  filtrando = false,
 }: Props) {
   const { setNodeRef, isOver } = useDroppable({
     id: stage.id,
@@ -109,7 +112,9 @@ export function KanbanColumn({
       >
         {cards.length === 0 && (
           <p className="py-6 text-center text-[11px] text-zinc-400">
-            Sem conversas. Click no + pra adicionar.
+            {filtrando
+              ? 'Nada com essa busca nesta etapa.'
+              : 'Sem conversas. Click no + pra adicionar.'}
           </p>
         )}
         {cards.map((c) => (

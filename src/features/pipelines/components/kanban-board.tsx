@@ -12,8 +12,10 @@ import {
   type DragStartEvent,
 } from '@dnd-kit/core';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { Search, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { pipelinesService, type CardSummary } from '../services/pipelines.service';
+import { criarFiltroDeCards } from '../lib/card-search';
 import { KanbanColumn } from './kanban-column';
 import { PipelineKpis } from './pipeline-kpis';
 import { KanbanCard } from './kanban-card';
@@ -34,11 +36,27 @@ export function KanbanBoard({ pipelineId }: Props) {
   const [addStageId, setAddStageId] = useState<string | null>(null);
   // Conversation popup (when card has a linked conversation, click opens chat).
   const [viewingConvId, setViewingConvId] = useState<string | null>(null);
+  // Busca do quadro: filtra os cards na tela (o board já vem inteiro).
+  const [busca, setBusca] = useState('');
 
   const { data: board, isLoading } = useQuery({
     queryKey: ['pipeline-board', pipelineId],
     queryFn: () => pipelinesService.getBoard(pipelineId),
   });
+
+  const filtro = useMemo(() => criarFiltroDeCards(busca), [busca]);
+  const { cardsVisiveis, totalCards, totalVisiveis } = useMemo(() => {
+    const visiveis: Record<string, CardSummary[]> = {};
+    let total = 0;
+    let achados = 0;
+    for (const [stageId, lista] of Object.entries(board?.cards ?? {})) {
+      const filtrada = filtro ? lista.filter(filtro) : lista;
+      visiveis[stageId] = filtrada;
+      total += lista.length;
+      achados += filtrada.length;
+    }
+    return { cardsVisiveis: visiveis, totalCards: total, totalVisiveis: achados };
+  }, [board, filtro]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
@@ -135,12 +153,46 @@ export function KanbanBoard({ pipelineId }: Props) {
       >
         <div className="flex h-full flex-col">
           <PipelineKpis board={board} />
+          <div className="flex items-center gap-3 px-4 pb-3">
+            <div className="relative w-full max-w-sm">
+              <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-zinc-400" />
+              <input
+                type="search"
+                value={busca}
+                onChange={(e) => setBusca(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Escape') setBusca('');
+                }}
+                placeholder="Buscar por nome, telefone ou descrição"
+                aria-label="Buscar cards no funil"
+                className="w-full rounded-md border border-zinc-200 bg-white py-1.5 pl-8 pr-8 text-sm placeholder:text-zinc-400 focus:border-zinc-400 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 [&::-webkit-search-cancel-button]:hidden"
+              />
+              {busca && (
+                <button
+                  type="button"
+                  onClick={() => setBusca('')}
+                  className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded p-1 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-zinc-800 dark:hover:text-zinc-200"
+                  aria-label="Limpar busca"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              )}
+            </div>
+            {filtro && (
+              <span className="shrink-0 text-xs text-zinc-500 dark:text-zinc-400">
+                {totalVisiveis === 0
+                  ? 'Nenhum card encontrado'
+                  : `${totalVisiveis} de ${totalCards} ${totalCards === 1 ? 'card' : 'cards'}`}
+              </span>
+            )}
+          </div>
           <div className="flex min-h-0 flex-1 gap-3 overflow-x-auto px-4 pb-4">
             {board.stages.map((stage) => (
               <KanbanColumn
                 key={stage.id}
                 stage={stage}
-                cards={board.cards[stage.id] ?? []}
+                cards={cardsVisiveis[stage.id] ?? []}
+                filtrando={!!filtro}
                 onAddCard={() => setAddStageId(stage.id)}
                 onCardClick={(c) => {
                   // Click primário: abre a conversa em popup. Sem conversa
