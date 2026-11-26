@@ -8,6 +8,7 @@ import {
   type CardSummary,
 } from '../services/pipelines.service';
 import { parseBRL, toBRLInput } from '../lib/card-values';
+import { CotaInput } from './cota-input';
 
 interface Props {
   open: boolean;
@@ -173,13 +174,7 @@ export function CardDialog({
             <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300">
               Valor da cota (R$)
             </label>
-            <input
-              value={value}
-              onChange={(e) => setValue(e.target.value)}
-              placeholder="ex: 150.000"
-              className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
-              inputMode="decimal"
-            />
+            <CotaInput value={value} onChange={setValue} />
           </div>
 
           {card && card.status !== 'OPEN' && (

@@ -6,6 +6,7 @@ import { X, Search, MessageSquare, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { pipelinesService } from '../services/pipelines.service';
 import { parseBRL } from '../lib/card-values';
+import { CotaInput } from './cota-input';
 import {
   inboxService,
   type Conversation,
@@ -188,13 +189,7 @@ export function AddConversationDialog({
           <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300">
             Valor da cota (R$) — opcional
           </label>
-          <input
-            value={value}
-            onChange={(e) => setValue(e.target.value)}
-            placeholder="ex: 150.000"
-            inputMode="decimal"
-            className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-100"
-          />
+          <CotaInput value={value} onChange={setValue} />
         </div>
 
         <div className="flex items-center justify-end gap-2 border-t border-zinc-200 bg-zinc-50 px-6 py-3 dark:border-zinc-800 dark:bg-zinc-900/50">

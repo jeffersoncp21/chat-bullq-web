@@ -30,6 +30,21 @@ export function parseBRL(input: string): number | undefined {
   return parseFloat(normalized);
 }
 
+/**
+ * Formata o campo do valor da cota enquanto a pessoa digita:
+ * "150000" → "150.000", "1250000,5" → "1.250.000,5".
+ * Ponto é sempre milhar (é a máscara que põe); vírgula é o decimal, até 2 casas.
+ */
+export function maskBRLInput(raw: string): string {
+  const semLixo = raw.replace(/[^\d,]/g, '');
+  const virgula = semLixo.indexOf(',');
+  const inteiro = (virgula >= 0 ? semLixo.slice(0, virgula) : semLixo).replace(/^0+(?=\d)/, '');
+  const decimal = virgula >= 0 ? semLixo.slice(virgula + 1).replace(/,/g, '').slice(0, 2) : '';
+  const comMilhar = inteiro.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+  if (virgula < 0) return comMilhar;
+  return `${comMilhar || '0'},${decimal}`;
+}
+
 /** Valor do card pronto pra preencher o campo: 150000 → "150.000". */
 export function toBRLInput(v: number | string | null | undefined): string {
   if (v === null || v === undefined || v === '') return '';
